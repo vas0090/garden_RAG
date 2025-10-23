@@ -140,9 +140,9 @@ print("Embeddings and texts saved to 'plant_embeddings.pkl'")
 
 from qdrant_client import QdrantClient
 
-# 🔑 Replace these with your actual credentials
-QDRANT_URL = "https://39cfcab5-75d8-477e-a868-725e513632fb.us-east4-0.gcp.cloud.qdrant.io"  # e.g. "https://1234abcd-yourname.qdrant.tech"
-QDRANT_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.wAdtDHamcStvw0GWEJ9FhQmy0emVdUekc9B8VEd6Nf0"
+# Replace these with your actual credentials
+QDRANT_URL = gardening_url 
+QDRANT_API_KEY = gardening_api_key 
 
 # Connect to your Qdrant cloud cluster
 client = QdrantClient(
@@ -230,7 +230,7 @@ points = [
 # --- Upload the data ---
 client.upsert(collection_name=collection_name, points=points)
 
-print(f"✅ Uploaded {len(points)} embeddings to collection '{collection_name}'!")
+print(f"Uploaded {len(points)} embeddings to collection '{collection_name}'!")
 
 collection_info = client.get_collection(collection_name)
 print("Collection info:", collection_info)
