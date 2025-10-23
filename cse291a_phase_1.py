@@ -9,17 +9,20 @@ Original file is located at
 1. Data Preprocessing
 """
 
-!pip install qdrant-client sentence-transformers pandas tqdm
+# !pip install qdrant-client sentence-transformers pandas tqdm
 
-!pip install numpy
+# !pip install numpy
 
-pip install beautifulsoup4
+# pip install beautifulsoup4
+
+# pip install python-dotenv
 
 # Imports
 # Core libraries
 import pandas as pd
 import json
 import numpy as np
+
 
 # Sentence transformer for embeddings
 from sentence_transformers import SentenceTransformer
@@ -48,7 +51,7 @@ print("JSONL Dataset Loaded")
 print("Shape:", df_json.shape)
 print("Columns:", df_json.columns.tolist())
 print("\nSample rows from JSONL dataset:")
-display(df_json.head(5))
+print(df_json.head(5))
 
 
 # --- Step 2: Load Indoor Plant Health CSV ---
@@ -58,7 +61,7 @@ print("\n Indoor Plant Health CSV Loaded")
 print("Shape:", df_csv.shape)
 print("Columns:", df_csv.columns.tolist())
 print("\nSample rows from CSV dataset:")
-display(df_csv.head(5))
+print(df_csv.head(5))
 
 # --- Clean HTML helper ---
 def clean_html(text):
@@ -101,7 +104,7 @@ combined_df.to_csv('combined_plants_dataset.csv', index=False)
 
 print("Combined dataset created and saved!")
 print("Shape:", combined_df.shape)
-display(combined_df.sample(5))
+print(combined_df.sample(5))
 
 """2. Make Embeddings for our data"""
 
@@ -110,7 +113,7 @@ combined_df = pd.read_csv("combined_plants_dataset.csv")
 
 print("Combined dataset loaded for embedding creation!")
 print("Shape:", combined_df.shape)
-display(combined_df.head(5))
+print(combined_df.head(5))
 
 # --- Step 2: Prepare the text data for embedding ---
 # Make sure column name matches what you saved earlier
@@ -139,6 +142,13 @@ print("Embeddings and texts saved to 'plant_embeddings.pkl'")
 """3. Setting up Qdrant"""
 
 from qdrant_client import QdrantClient
+from dotenv import load_dotenv
+import os
+
+# get the api key from the dotenv 
+load_dotenv()  # reads .env into os.environ
+gardening_api_key = os.getenv("QDRANT_API_KEY")
+gardening_url = os.getenv("QDRANT_URL")
 
 # Replace these with your actual credentials
 QDRANT_URL = gardening_url 
