@@ -166,7 +166,6 @@ print("Collections available:", client.get_collections())
 
 import pickle
 
-# Load the file you saved earlier
 with open("plant_embeddings.pkl", "rb") as f:
     data = pickle.load(f)
 
@@ -191,7 +190,6 @@ print(f"Collection '{collection_name}' created successfully!")
 
 import pickle
 
-# Load your pickle file (replace with your actual filename)
 with open("plant_embeddings.pkl", "rb") as f:
     data = pickle.load(f)
 
@@ -221,13 +219,11 @@ embeddings = np.array(data["embeddings"])
 
 print(f"Loaded {len(texts)} entries with dimension {embeddings.shape[1]}")
 
-# --- Confirm connection (assuming you already connected the client) ---
+# --- Confirm connection ---
 print("Collections available:", client.get_collections())
 
-# --- Name of your existing collection ---
 collection_name = "qa_embeddings"
 
-# --- Prepare the points for upload ---
 points = [
     PointStruct(
         id=str(uuid.uuid4()),  # unique ID per item
@@ -237,7 +233,7 @@ points = [
     for i in range(len(texts))
 ]
 
-# --- Upload the data ---
+# Upload the data 
 client.upsert(collection_name=collection_name, points=points)
 
 print(f"Uploaded {len(points)} embeddings to collection '{collection_name}'!")
@@ -282,25 +278,25 @@ def ask_titan(prompt, max_tokens=300):
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def ask_with_context(query):
-    # Step 1: Encode the query
+    # Encoding the query
     query_vec = model.encode(query).tolist()
 
-    # Step 2: Retrieve top matches from Qdrant
+    # Retrieving top matches from Qdrant
     results = client.search(
         collection_name="qa_embeddings",
         query_vector=query_vec,
         limit=3
     )
 
-    # Step 3: Combine retrieved context
+    # Combine retrieved context
     context_texts = [r.payload["text"] for r in results]
     context = "\n\n".join(context_texts)
 
-    # Step 4: Build final LLM prompt
+    # Build final LLM prompt
     prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
 
 
-    # Step 5: Generate answer from Titan
+    # Generate answer from Titan
     answer = ask_titan(prompt)
     print("Titan Answer:")
     print(answer)
@@ -357,3 +353,48 @@ if __name__ == "__main__":
     ask_with_context(user_query8)
     user_query9 = "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
     ask_with_context(user_query9)
+    ground_truth = {
+        "What regional climate and soil pH conditions produce optimal potato yields?": [
+            "Potatoes perform best in cool temperate climates with daytime temperatures between 15–20°C and minimal frost exposure. Optimal soil pH ranges from 5.0–6.0 to prevent scab disease. Well-drained, loamy soils with moderate moisture retention are ideal for tuber expansion and nutrient uptake."
+        ],
+        "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?": [
+            "Effective non-chemical controls include using neem oil sprays weekly during early fruiting, introducing ladybugs for aphid control, and installing fine mesh netting to deter fruit flies. Intercropping with marigolds also reduces nematode and beetle pressure under humid conditions."
+        ],
+        "Why do hydrangea flowers change color each year, and how can I control the shade?": [
+            "Hydrangea color shifts occur because anthocyanin pigments react to soil acidity. Acidic soils (pH 5.0–5.5) produce blue blooms due to aluminum availability, while alkaline soils (pH 6.5–7.0) yield pink shades. Adding garden lime raises pH for pink tones; sulfur lowers it for blue."
+        ],
+        "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?": [
+            "Cut back dead foliage after the first frost, apply 5–8 cm of organic mulch to insulate roots, and sow cover crops like clover to prevent erosion and fix nitrogen. Avoid heavy watering before freeze events to reduce heaving and root damage."
+        ],
+        "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?": [
+            "Beans and corn form a classic symbiotic pair: beans fix nitrogen, enriching soil for corn. Basil deters tomato hornworms when planted beside tomatoes, while carrots and onions repel each other’s pests through complementary volatile compounds."
+        ],
+        "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?": [
+            "Healthy indoor plants show firm, turgid leaves, vivid coloration, and steady new leaf or bud formation. Shiny leaves and consistent growth rates indicate proper humidity and sufficient light exposure. Brown tips or stunted growth suggest imbalance."
+        ],
+        "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?": [
+            "Rotate crops annually to prevent nutrient depletion. Follow nitrogen-fixing legumes (peas, beans) with root crops (carrots, onions), and then fruiting crops (tomatoes, peppers). Avoid repeating family groups within three years to minimize disease buildup."
+        ],
+        "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?": [
+            "Yellowing leaves usually result from overwatering or nitrogen deficiency. Allow the soil to dry between waterings and apply a balanced fertilizer (10-10-10). Wilting under dry conditions signals water stress; increase humidity or watering frequency accordingly."
+        ],
+        "Can a plant survive or grow in complete darkness, and what physiological processes are affected?": [
+            "Plants cannot grow indefinitely in total darkness because photosynthesis ceases without light. They exhibit etiolation, elongated stems and pale leaves, caused by chlorophyll loss and energy depletion. Prolonged darkness leads to carbohydrate starvation and death."
+        ],
+        "How should I design a raised bed garden to optimize drainage, root health, and overall yield?": [
+            "A well-designed raised bed should be 25–35 cm deep with layered soil: coarse gravel at the base for drainage, followed by loam and compost for aeration and nutrients. A slight 2–3% slope promotes runoff while preventing root rot and maintaining high yields."
+        ]
+    }
+    retrieval_results = []
+    for query, relevant_docs in ground_truth.items():
+        query_vec = model.encode(query).tolist()
+        results = client.search(collection_name="qa_embeddings", query_vector=query_vec,limit=5)
+        retrieved_docs = [r.id for r in results]
+        p = precision_at_k(retrieved_docs, relevant_docs, k=5)
+        r = recall_at_k(retrieved_docs, relevant_docs)
+        f1 = f1_score(p, r)
+        print(f"\nQuery: {query}")
+        print(f"Precision@5={p:.2f}, Recall={r:.2f}, F1={f1:.2f}")
+        retrieval_results.append((retrieved_docs, relevant_docs))
+    mrr = mean_reciprocal_rank(retrieval_results)
+    print(f"\nOverall Mean Reciprocal Rank (MRR): {mrr:.2f}")
