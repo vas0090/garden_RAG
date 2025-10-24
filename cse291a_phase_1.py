@@ -251,3 +251,109 @@ query_vec = model.encode(query).tolist()
 results = client.search(collection_name=collection_name, query_vector=query_vec, limit=3)
 for r in results:
     print(f"Score: {r.score:.4f} | Text: {r.payload['text'][:150]}...")
+
+import boto3, json
+
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name="us-west-2"   # same region as your Bedrock access
+)
+def ask_titan(prompt, max_tokens=300):
+    body = json.dumps({
+        "inputText": prompt,
+        "textGenerationConfig": {
+            "maxTokenCount": max_tokens,
+            "temperature": 0.3,
+            "topP": 0.9
+        }
+    })
+
+    response = bedrock.invoke_model(
+        modelId="amazon.titan-text-lite-v1",
+        body=body,
+        contentType="application/json"
+    )
+
+    result = json.loads(response["body"].read())
+    return result["results"][0]["outputText"]
+
+# from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+def ask_with_context(query):
+    # Step 1: Encode the query
+    query_vec = model.encode(query).tolist()
+
+    # Step 2: Retrieve top matches from Qdrant
+    results = client.search(
+        collection_name="qa_embeddings",
+        query_vector=query_vec,
+        limit=3
+    )
+
+    # Step 3: Combine retrieved context
+    context_texts = [r.payload["text"] for r in results]
+    context = "\n\n".join(context_texts)
+
+    # Step 4: Build final LLM prompt
+    prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
+
+
+    # Step 5: Generate answer from Titan
+    answer = ask_titan(prompt)
+    print("Titan Answer:")
+    print(answer)
+    return answer
+
+# --- Precision@k ---
+def precision_at_k(retrieved, relevant, k):
+    retrieved_k = retrieved[:k]
+    intersection = len(set(retrieved_k) & set(relevant))
+    return intersection / k if k > 0 else 0
+
+# --- Recall@k ---
+def recall_at_k(retrieved, relevant):
+    intersection = len(set(retrieved) & set(relevant))
+    return intersection / len(relevant) if len(relevant) > 0 else 0
+
+# --- F1 Score ---
+def f1_score(p, r):
+    return 2 * (p * r) / (p + r) if (p + r) > 0 else 0
+
+# --- Mean Reciprocal Rank (MRR) ---
+def mean_reciprocal_rank(all_results):
+    reciprocal_ranks = []
+    for retrieved, relevant in all_results:
+        rank = None
+        for i, doc in enumerate(retrieved):
+            if doc in relevant:
+                rank = i + 1
+                break
+        if rank:
+            reciprocal_ranks.append(1 / rank)
+        else:
+            reciprocal_ranks.append(0)
+    return np.mean(reciprocal_ranks)
+
+if __name__ == "__main__":
+    user_query0 = "What regional climate and soil pH conditions produce optimal potato yields?"
+    ask_with_context(user_query0)
+    user_query1 = "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?"
+    ask_with_context(user_query1)
+    user_query2 = "Why do hydrangea flowers change color each year, and how can I control the shade?"
+    ask_with_context(user_query2)
+    user_query3 = "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?"
+    ask_with_context(user_query3)
+    user_query4 = "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?"
+    ask_with_context(user_query4)
+    user_query5 = "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?"
+    ask_with_context(user_query5)
+    user_query6 = "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?"
+    ask_with_context(user_query6)
+    user_query7 = "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?"
+    ask_with_context(user_query7)
+    user_query8 = "Can a plant survive or grow in complete darkness, and what physiological processes are affected?"
+    ask_with_context(user_query8)
+    user_query9 = "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
+    ask_with_context(user_query9)
