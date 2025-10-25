@@ -302,22 +302,22 @@ def ask_with_context(query):
     print(answer)
     return answer
 
-# --- Precision@k ---
+# --- Old Precision@k ---
 def precision_at_k(retrieved, relevant, k):
     retrieved_k = retrieved[:k]
     intersection = len(set(retrieved_k) & set(relevant))
     return intersection / k if k > 0 else 0
 
-# --- Recall@k ---
+# --- Old Recall@k ---
 def recall_at_k(retrieved, relevant):
     intersection = len(set(retrieved) & set(relevant))
     return intersection / len(relevant) if len(relevant) > 0 else 0
 
-# --- F1 Score ---
+# --- Old F1 Score ---
 def f1_score(p, r):
     return 2 * (p * r) / (p + r) if (p + r) > 0 else 0
 
-# --- Mean Reciprocal Rank (MRR) ---
+# --- Old Mean Reciprocal Rank (MRR) ---
 def mean_reciprocal_rank(all_results):
     reciprocal_ranks = []
     for retrieved, relevant in all_results:
@@ -394,7 +394,7 @@ if __name__ == "__main__":
         r = recall_at_k(retrieved_docs, relevant_docs)
         f1 = f1_score(p, r)
         print(f"\nQuery: {query}")
-        print(f"Precision@5={p:.2f}, Recall={r:.2f}, F1={f1:.2f}")
+        #print(f"Precision@5={p:.2f}, Recall={r:.2f}, F1={f1:.2f}")
         retrieval_results.append((retrieved_docs, relevant_docs))
     mrr = mean_reciprocal_rank(retrieval_results)
-    print(f"\nOverall Mean Reciprocal Rank (MRR): {mrr:.2f}")
+    #print(f"\nOverall Mean Reciprocal Rank (MRR): {mrr:.2f}")
