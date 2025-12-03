@@ -22,6 +22,7 @@ Original file is located at
 import pandas as pd
 import json
 import numpy as np
+import time
 
 
 # Sentence transformer for embeddings
@@ -247,6 +248,61 @@ query_vec = model.encode(query).tolist()
 results = client.search(collection_name=collection_name, query_vector=query_vec, limit=3)
 for r in results:
     print(f"Score: {r.score:.4f} | Text: {r.payload['text'][:150]}...")
+
+
+# Measure embedding time + Qdrant retrieval time
+def measure_retrieval_time(query, k=5):
+    # 1. Encode query → measure embedding latency
+    start_embed = time.time()
+    query_vec = model.encode(query).tolist()
+    embed_time = time.time() - start_embed
+
+    # 2. Qdrant ANN similarity search latency
+    start = time.time()
+    results = client.search(
+        collection_name="qa_embeddings",
+        query_vector=query_vec,
+        limit=k
+    )
+    retrieval_time = time.time() - start
+
+    return embed_time, retrieval_time, results
+
+
+# Test a few queries for baseline retrieval speed
+# BEFORE chunking
+
+test_queries = [ "What regional climate and soil pH conditions produce optimal potato yields?",
+    "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?",
+    "Why do hydrangea flowers change color each year, and how can I control the shade?",
+    "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?", 
+    "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?",
+    "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?",
+    "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?",
+    "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?",
+    "Can a plant survive or grow in complete darkness, and what physiological processes are affected?",
+    "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
+    
+]
+
+retrieval_times = []
+embedding_times = []
+
+print("----- BASELINE RETRIEVAL SPEED (Before Chunking) -----")
+
+for q in test_queries:
+    embed_t, rett,  = measure_retrieval_time(q)
+    embedding_times.append(embed_t)
+    retrieval_times.append(ret_t)
+    print(f"Query: {q}")
+    print(f"  Embedding time: {embed_t1000:.2f} ms")
+    print(f"  Retrieval time: {ret_t1000:.2f} ms")
+    print("-----------------------------------------------------\n")
+
+print("AVERAGE EMBEDDING LATENCY (baseline):", np.mean(embedding_times)*1000, "ms")
+print("AVERAGE RETRIEVAL LATENCY (baseline):", np.mean(retrieval_times)*1000, "ms")
+print("STD DEV (retrieval):", np.std(retrieval_times)*1000, "ms")
+
 
 import boto3, json
 
