@@ -291,12 +291,12 @@ embedding_times = []
 print("----- BASELINE RETRIEVAL SPEED (Before Chunking) -----")
 
 for q in test_queries:
-    embed_t, rett,  = measure_retrieval_time(q)
+    embed_t, ret_t,results  = measure_retrieval_time(q)
     embedding_times.append(embed_t)
     retrieval_times.append(ret_t)
     print(f"Query: {q}")
-    print(f"  Embedding time: {embed_t1000:.2f} ms")
-    print(f"  Retrieval time: {ret_t1000:.2f} ms")
+    print(f"  Embedding time: {embed_t*1000:.2f} ms")
+    print(f"  Retrieval time: {ret_t*1000:.2f} ms")
     print("-----------------------------------------------------\n")
 
 print("AVERAGE EMBEDDING LATENCY (baseline):", np.mean(embedding_times)*1000, "ms")
@@ -345,7 +345,7 @@ def ask_with_context(query):
     )
 
     # Combine retrieved context
-    context_texts = [r.payload["text"] for r in results]
+    context_texts = [r.payload["text"] for r in results.points]
     context = "\n\n".join(context_texts)
 
     # Build final LLM prompt
