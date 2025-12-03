@@ -245,8 +245,8 @@ print("Collection info:", collection_info)
 query = "How does potatoes grow?"
 query_vec = model.encode(query).tolist()
 
-results = client.search(collection_name=collection_name, query_vector=query_vec, limit=3)
-for r in results:
+results = client.query_points(collection_name=collection_name, query=query_vec, limit=3)
+for r in results.points:
     print(f"Score: {r.score:.4f} | Text: {r.payload['text'][:150]}...")
 
 
@@ -259,9 +259,9 @@ def measure_retrieval_time(query, k=5):
 
     # 2. Qdrant ANN similarity search latency
     start = time.time()
-    results = client.search(
+    results = client.query_points(
         collection_name="qa_embeddings",
-        query_vector=query_vec,
+        query=query_vec,
         limit=k
     )
     retrieval_time = time.time() - start
@@ -338,9 +338,9 @@ def ask_with_context(query):
     query_vec = model.encode(query).tolist()
 
     # Retrieving top matches from Qdrant
-    results = client.search(
+    results = client.query_points(
         collection_name="qa_embeddings",
-        query_vector=query_vec,
+        query=query_vec,
         limit=3
     )
 
@@ -444,8 +444,8 @@ if __name__ == "__main__":
     retrieval_results = []
     for query, relevant_docs in ground_truth.items():
         query_vec = model.encode(query).tolist()
-        results = client.search(collection_name="qa_embeddings", query_vector=query_vec,limit=5)
-        retrieved_docs = [r.id for r in results]
+        results = client.query_points(collection_name="qa_embeddings", query=query_vec,limit=5)
+        retrieved_docs = [r.id for r in results.points]
         p = precision_at_k(retrieved_docs, relevant_docs, k=5)
         r = recall_at_k(retrieved_docs, relevant_docs)
         f1 = f1_score(p, r)
