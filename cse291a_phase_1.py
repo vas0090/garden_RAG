@@ -357,7 +357,7 @@ def ask_with_context(query,  detailed=False):
         word_limit = 80
         max_tokens = 150 
     
-    add_detail = "Provide a complete answer in approximately" +{word_limit}+ "words. Ensure you finish your last sentence."
+    add_detail = f"Provide a complete answer in approximately {word_limit} words. Ensure you finish your last sentence."
     # Build final LLM prompt
     prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
 
@@ -399,7 +399,7 @@ def mean_reciprocal_rank(all_results):
     return np.mean(reciprocal_ranks)
 
 if __name__ == "__main__":
-    detail = True
+    detail = False
     user_query0 = "What regional climate and soil pH conditions produce optimal potato yields?"
     ask_with_context(user_query0, detail)
     user_query1 = "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?"
