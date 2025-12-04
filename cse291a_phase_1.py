@@ -333,7 +333,7 @@ def ask_titan(prompt, max_tokens=300):
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-def ask_with_context(query):
+def ask_with_context(query,  detailed=False):
     # Encoding the query
     query_vec = model.encode(query).tolist()
 
@@ -341,19 +341,29 @@ def ask_with_context(query):
     results = client.query_points(
         collection_name="qa_embeddings",
         query=query_vec,
-        limit=3
+        limit=3 if detailed else 2  # More context for detailed answers
     )
 
     # Combine retrieved context
     context_texts = [r.payload["text"] for r in results.points]
     context = "\n\n".join(context_texts)
 
+
+    # Allow for conciseness if specified with the detailed argument
+    if detailed:
+        word_limit = 250
+        max_tokens = 400  
+    else:
+        word_limit = 80
+        max_tokens = 150 
+    
+    add_detail = "Provide a complete answer in approximately" +{word_limit}+ "words. Ensure you finish your last sentence."
     # Build final LLM prompt
     prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
 
 
     # Generate answer from Titan
-    answer = ask_titan(prompt)
+    answer = ask_titan(prompt+add_detail, max_tokens=max_tokens) #with added conciseness detail and token limit
     print("Titan Answer:")
     print(answer)
     return answer
@@ -389,26 +399,27 @@ def mean_reciprocal_rank(all_results):
     return np.mean(reciprocal_ranks)
 
 if __name__ == "__main__":
+    detail = True
     user_query0 = "What regional climate and soil pH conditions produce optimal potato yields?"
-    ask_with_context(user_query0)
+    ask_with_context(user_query0, detail)
     user_query1 = "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?"
-    ask_with_context(user_query1)
+    ask_with_context(user_query1, detail)
     user_query2 = "Why do hydrangea flowers change color each year, and how can I control the shade?"
-    ask_with_context(user_query2)
+    ask_with_context(user_query2, detail)
     user_query3 = "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?"
-    ask_with_context(user_query3)
+    ask_with_context(user_query3, detail)
     user_query4 = "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?"
-    ask_with_context(user_query4)
+    ask_with_context(user_query4, detail)
     user_query5 = "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?"
-    ask_with_context(user_query5)
+    ask_with_context(user_query5, detail)
     user_query6 = "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?"
-    ask_with_context(user_query6)
+    ask_with_context(user_query6, detail)
     user_query7 = "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?"
-    ask_with_context(user_query7)
+    ask_with_context(user_query7, detail)
     user_query8 = "Can a plant survive or grow in complete darkness, and what physiological processes are affected?"
-    ask_with_context(user_query8)
+    ask_with_context(user_query8, detail)
     user_query9 = "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
-    ask_with_context(user_query9)
+    ask_with_context(user_query9, detail)
     ground_truth = {
         "What regional climate and soil pH conditions produce optimal potato yields?": [
             "Potatoes perform best in cool temperate climates with daytime temperatures between 15–20°C and minimal frost exposure. Optimal soil pH ranges from 5.0–6.0 to prevent scab disease. Well-drained, loamy soils with moderate moisture retention are ideal for tuber expansion and nutrient uptake."
