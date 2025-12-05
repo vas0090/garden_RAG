@@ -19,6 +19,7 @@ Original file is located at
 
 # Imports
 # Core libraries
+import Eval_Function as eval
 import pandas as pd
 import json
 import numpy as np
@@ -39,6 +40,28 @@ warnings.filterwarnings("ignore")
 
 # BeautifulSoup Import
 from bs4 import BeautifulSoup
+
+def chunk_text(text, max_length=300, overlap=50):
+    """
+    Split long text into overlapping chunks.
+    max_length = number of words per chunk
+    overlap = number of words to repeat between chunks
+    """
+    words = text.split()
+    if len(words) <= max_length:
+        return [text]
+
+    chunks = []
+    start = 0
+
+    while start < len(words):
+        end = start + max_length
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        start = end - overlap
+
+    return chunks
+
 
 # --- Step 1: Load JSONL dataset ---
 json_data = []
@@ -117,8 +140,23 @@ print("Shape:", combined_df.shape)
 print(combined_df.head(5))
 
 # --- Step 2: Prepare the text data for embedding ---
-# Make sure column name matches what you saved earlier
-texts = combined_df['text'].astype(str).tolist()
+# changing to chunked approach to combined dataset
+all_chunks = []
+chunk_id = 0
+
+for text in combined_df['text']:
+    chunks = chunk_text(text, max_length=300, overlap=50)
+    for c in chunks:
+        all_chunks.append({
+            "chunk_id": chunk_id,
+            "text": c
+        })
+        chunk_id += 1
+
+chunk_df = pd.DataFrame(all_chunks)
+texts = chunk_df['text'].tolist()
+print("Total chunks created:", len(chunk_df))
+
 
 print(f"Number of text entries to embed: {len(texts)}")
 
@@ -229,9 +267,12 @@ points = [
     PointStruct(
         id=str(uuid.uuid4()),  # unique ID per item
         vector=embeddings[i].tolist(),
-        payload={"text": texts[i]}  # store the full QA text as metadata
+        payload={
+            "text": chunk_df.iloc[i]['text'],
+            "chunk_id": int(chunk_df.iloc[i]['chunk_id'])
+        }  # store the full QA text as metadata
     )
-    for i in range(len(texts))
+    for i in range(len(chunk_df))
 ]
 
 # Upload the data 
