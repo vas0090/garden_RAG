@@ -244,8 +244,8 @@ print("Collection info:", collection_info)
 query = "How does potatoes grow?"
 query_vec = model.encode(query).tolist()
 
-results = client.search(collection_name=collection_name, query_vector=query_vec, limit=3)
-for r in results:
+results = client.query_points(collection_name=collection_name, query=query_vec, limit=3)
+for r in results.points:
     print(f"Score: {r.score:.4f} | Text: {r.payload['text'][:150]}...")
 
 import boto3, json
@@ -278,29 +278,75 @@ def ask_titan(prompt, max_tokens=300):
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def ask_with_context(query):
-    # Encoding the query
-    query_vec = model.encode(query).tolist()
+    # --------------------------------------
+    # 0. Start TOTAL RAG timer
+    # --------------------------------------
+    t0 = time.time()
 
-    # Retrieving top matches from Qdrant
-    results = client.search(
+    # --------------------------------------
+    # 1. Encode query (embedding latency)
+    # --------------------------------------
+    t_embed_start = time.time()
+    query_vec = model.encode(query).tolist()
+    embed_time_ms = (time.time() - t_embed_start) * 1000.0
+
+    # --------------------------------------
+    # 2. Qdrant retrieval (retrieval latency)
+    # --------------------------------------
+    t_retr_start = time.time()
+    results = client.query_points(
         collection_name="qa_embeddings",
-        query_vector=query_vec,
+        query=query_vec,
         limit=3
     )
+    retrieval_time_ms = (time.time() - t_retr_start) * 1000.0
 
-    # Combine retrieved context
-    context_texts = [r.payload["text"] for r in results]
+    # Build context from retrieved top documents
+    context_texts = [r.payload["text"] for r in results.points]
     context = "\n\n".join(context_texts)
 
-    # Build final LLM prompt
-    prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
+    # --------------------------------------
+    # 3. Build prompt (unchanged)
+    # --------------------------------------
+    prompt = (
+        f"Context:\n{context}\n\n"
+        f"Question: {query}\n\n"
+        f"Answer:"
+    )
 
-
-    # Generate answer from Titan
+    # --------------------------------------
+    # 4. Titan generation (generation latency)
+    # --------------------------------------
+    t_gen_start = time.time()
     answer = ask_titan(prompt)
-    print("Titan Answer:")
+    generation_time_ms = (time.time() - t_gen_start) * 1000.0
+
+    # --------------------------------------
+    # 5. TOTAL RAG TIME
+    # --------------------------------------
+    total_rag_latency_ms = (time.time() - t0) * 1000.0
+
+    # --------------------------------------
+    # 6. Print full latency breakdown
+    # --------------------------------------
+    print("\n===============================")
+    print(f"Baseline Query: {query}")
+    print(f"Embedding latency:  {embed_time_ms:.2f} ms")
+    print(f"Retrieval latency:  {retrieval_time_ms:.2f} ms")
+    print(f"Generation latency: {generation_time_ms:.2f} ms")
+    print(f"TOTAL RAG latency:  {total_rag_latency_ms:.2f} ms")
+    print("===============================\n")
+
+    print("Titan Answer:\n")
     print(answer)
-    return answer
+
+    return {
+        "answer": answer,
+        "embed_ms": embed_time_ms,
+        "retrieval_ms": retrieval_time_ms,
+        "generation_ms": generation_time_ms,
+        "total_ms": total_rag_latency_ms
+    }
 
 # --- Old Precision@k ---
 def precision_at_k(retrieved, relevant, k):
@@ -388,8 +434,8 @@ if __name__ == "__main__":
     retrieval_results = []
     for query, relevant_docs in ground_truth.items():
         query_vec = model.encode(query).tolist()
-        results = client.search(collection_name="qa_embeddings", query_vector=query_vec,limit=5)
-        retrieved_docs = [r.id for r in results]
+        results = client.query_points(collection_name="qa_embeddings", query=query_vec,limit=5)
+        retrieved_docs = [r.id for r in results.points]
         p = precision_at_k(retrieved_docs, relevant_docs, k=5)
         r = recall_at_k(retrieved_docs, relevant_docs)
         f1 = f1_score(p, r)
