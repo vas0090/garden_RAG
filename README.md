@@ -23,3 +23,25 @@ What you will need:
   QDRANT_URL = "https://yourqdranturlhere.gcp.cloud.qdrant.io" 
   QDRANT_API_KEY = "insert your QDrant API Key here"
   ```
+- Ensure you have python3, pip3 and git installed and install these python libraries:
+
+  ```
+  pip3 install qdrant-client sentence-transformers pandas tqdm
+  pip3 install numpy bs4 python-dotenv boto3
+  ```
+- Once you have an EC2 instance running, ensure you have AWS keys in order to run
+
+  ```
+  aws configure
+  ```
+  and paste the following: ```AWS_ACCESS_KEY_ID```, ```AWS_SECRET_ACCESS_KEY```, ```AWS_SESSION_TOKEN``` - when prompted, and us-west2 as the region.
+
+Once your environment is set up: use the following command to run our code: 
+```
+python3 cse291a_phase_1.py
+```
+
+
+
+
+  
