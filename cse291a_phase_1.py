@@ -329,7 +329,7 @@ test_queries = [ "What regional climate and soil pH conditions produce optimal p
 retrieval_times = []
 embedding_times = []
 
-print("----- BASELINE RETRIEVAL SPEED (Before Chunking) -----")
+print("----- BASELINE RETRIEVAL SPEED (After Chunking) -----")
 
 for q in test_queries:
     embed_t, ret_t,results  = measure_retrieval_time(q)
@@ -376,14 +376,25 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def ask_with_context(query,  detailed=False):
     # Encoding the query
+    # -----------------------------
+    # 1. Measure embedding latency
+    # -----------------------------
+    t0 = time.time()
     query_vec = model.encode(query).tolist()
+    embed_time = (time.time() - t0) * 1000  # ms
 
+    # -----------------------------
+    # 2. Measure retrieval latency
+    # -----------------------------
+    t1 = time.time()
     # Retrieving top matches from Qdrant
     results = client.query_points(
         collection_name="qa_embeddings",
         query=query_vec,
         limit=3 if detailed else 2  # More context for detailed answers
     )
+    retrieval_time = (time.time() - t1) * 1000  # ms
+
 
     # Combine retrieved context
     context_texts = [r.payload["text"] for r in results.points]
@@ -400,14 +411,40 @@ def ask_with_context(query,  detailed=False):
     
     add_detail = f"Provide a complete answer in approximately {word_limit} words. Ensure you finish your last sentence."
     # Build final LLM prompt
-    prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
+    prompt = (
+        f"Context:\n{context}\n\n"
+        f"Question: {query}\n\n"
+        f"Answer:"
+    )
 
 
+    # -----------------------------
+    # 3. Measure LLM generation time
+    # -----------------------------
+    t2 = time.time()
     # Generate answer from Titan
     answer = ask_titan(prompt+add_detail, max_tokens=max_tokens) #with added conciseness detail and token limit
+    generation_time = (time.time() - t2) * 1000  # ms
+    # --------------------------------------
+    # 4. TOTAL RAG LATENCY = now - t0
+    # --------------------------------------
+    total_rag_latency_ms = (time.time() - t0) * 1000.0  # ms
+
+    
+    # -----------------------------
+    # 5. Print latency report
+    # -----------------------------
+    print("\n===============================")
+    print(f"Query: {query}")
+    print(f"Embedding latency: {embed_time:.2f} ms")
+    print(f"Retrieval latency: {retrieval_time:.2f} ms")
+    print(f"Generation latency: {generation_time:.2f} ms")
+    print(f"TOTAL RAG latency: {total_rag_latency_ms:.2f} ms")
+    print("===============================\n")
+
     print("Titan Answer:")
     print(answer)
-    return answer
+    return answer, embed_time, retrieval_time, generation_time, total_rag_latency_ms
 
 # --- Old Precision@k ---
 def precision_at_k(retrieved, relevant, k):
