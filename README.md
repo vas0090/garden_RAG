@@ -9,7 +9,7 @@ Authors: [Aditi Thanekar](https://github.com/aditithanekar), [Amisha Prasad](htt
 
 
 ## Files Needed for Our RAG
-1. ```cse291a_phase_1.py```: This is our main file for implementing RAG, creating embeddings, feeding the embeddings into the Qdrant API, and calling the Triton LLM to answer our specific gardening related questions.
+1. ```cse291a_phase_1.py```: This is our main file for implementing RAG, creating embeddings, feeding the embeddings into the Qdrant API, and calling the Titan LLM to answer our specific gardening related questions.
 2. ```combined_plants_dataset.csv```: This is our main dataset - post-processing, which contains a combination of the 2 datasets mentioned above which are knowledge-based Q&A dataset and a quantitative plant dataset.
 
 
