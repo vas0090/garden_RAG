@@ -19,9 +19,11 @@ Original file is located at
 
 # Imports
 # Core libraries
+import Eval_Function as eval
 import pandas as pd
 import json
 import numpy as np
+import time
 
 
 # Sentence transformer for embeddings
@@ -38,6 +40,28 @@ warnings.filterwarnings("ignore")
 
 # BeautifulSoup Import
 from bs4 import BeautifulSoup
+
+def chunk_text(text, max_length=300, overlap=50):
+    """
+    Split long text into overlapping chunks.
+    max_length = number of words per chunk
+    overlap = number of words to repeat between chunks
+    """
+    words = text.split()
+    if len(words) <= max_length:
+        return [text]
+
+    chunks = []
+    start = 0
+
+    while start < len(words):
+        end = start + max_length
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        start = end - overlap
+
+    return chunks
+
 
 # --- Step 1: Load JSONL dataset ---
 json_data = []
@@ -116,8 +140,23 @@ print("Shape:", combined_df.shape)
 print(combined_df.head(5))
 
 # --- Step 2: Prepare the text data for embedding ---
-# Make sure column name matches what you saved earlier
-texts = combined_df['text'].astype(str).tolist()
+# changing to chunked approach to combined dataset
+all_chunks = []
+chunk_id = 0
+
+for text in combined_df['text']:
+    chunks = chunk_text(text, max_length=300, overlap=50)
+    for c in chunks:
+        all_chunks.append({
+            "chunk_id": chunk_id,
+            "text": c
+        })
+        chunk_id += 1
+
+chunk_df = pd.DataFrame(all_chunks)
+texts = chunk_df['text'].tolist()
+print("Total chunks created:", len(chunk_df))
+
 
 print(f"Number of text entries to embed: {len(texts)}")
 
@@ -228,9 +267,12 @@ points = [
     PointStruct(
         id=str(uuid.uuid4()),  # unique ID per item
         vector=embeddings[i].tolist(),
-        payload={"text": texts[i]}  # store the full QA text as metadata
+        payload={
+            "text": chunk_df.iloc[i]['text'],
+            "chunk_id": int(chunk_df.iloc[i]['chunk_id'])
+        }  # store the full QA text as metadata
     )
-    for i in range(len(texts))
+    for i in range(len(chunk_df))
 ]
 
 # Upload the data 
@@ -244,9 +286,64 @@ print("Collection info:", collection_info)
 query = "How does potatoes grow?"
 query_vec = model.encode(query).tolist()
 
-results = client.search(collection_name=collection_name, query_vector=query_vec, limit=3)
-for r in results:
+results = client.query_points(collection_name=collection_name, query=query_vec, limit=3)
+for r in results.points:
     print(f"Score: {r.score:.4f} | Text: {r.payload['text'][:150]}...")
+
+
+# Measure embedding time + Qdrant retrieval time
+def measure_retrieval_time(query, k=5):
+    # 1. Encode query → measure embedding latency
+    start_embed = time.time()
+    query_vec = model.encode(query).tolist()
+    embed_time = time.time() - start_embed
+
+    # 2. Qdrant ANN similarity search latency
+    start = time.time()
+    results = client.query_points(
+        collection_name="qa_embeddings",
+        query=query_vec,
+        limit=k
+    )
+    retrieval_time = time.time() - start
+
+    return embed_time, retrieval_time, results
+
+
+# Test a few queries for baseline retrieval speed
+# BEFORE chunking
+
+test_queries = [ "What regional climate and soil pH conditions produce optimal potato yields?",
+    "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?",
+    "Why do hydrangea flowers change color each year, and how can I control the shade?",
+    "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?", 
+    "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?",
+    "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?",
+    "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?",
+    "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?",
+    "Can a plant survive or grow in complete darkness, and what physiological processes are affected?",
+    "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
+    
+]
+
+retrieval_times = []
+embedding_times = []
+
+print("----- BASELINE RETRIEVAL SPEED (After Chunking) -----")
+
+for q in test_queries:
+    embed_t, ret_t,results  = measure_retrieval_time(q)
+    embedding_times.append(embed_t)
+    retrieval_times.append(ret_t)
+    print(f"Query: {q}")
+    print(f"  Embedding time: {embed_t*1000:.2f} ms")
+    print(f"  Retrieval time: {ret_t*1000:.2f} ms")
+    print("-----------------------------------------------------\n")
+
+print("AVERAGE EMBEDDING LATENCY (baseline):", np.mean(embedding_times)*1000, "ms")
+print("AVERAGE RETRIEVAL LATENCY (baseline):", np.mean(retrieval_times)*1000, "ms")
+print("STD DEV (retrieval):", np.std(retrieval_times)*1000, "ms")
+
 
 import boto3, json
 
@@ -277,30 +374,77 @@ def ask_titan(prompt, max_tokens=300):
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-def ask_with_context(query):
+def ask_with_context(query,  detailed=False):
     # Encoding the query
+    # -----------------------------
+    # 1. Measure embedding latency
+    # -----------------------------
+    t0 = time.time()
     query_vec = model.encode(query).tolist()
+    embed_time = (time.time() - t0) * 1000  # ms
 
+    # -----------------------------
+    # 2. Measure retrieval latency
+    # -----------------------------
+    t1 = time.time()
     # Retrieving top matches from Qdrant
-    results = client.search(
+    results = client.query_points(
         collection_name="qa_embeddings",
-        query_vector=query_vec,
-        limit=3
+        query=query_vec,
+        limit=3 if detailed else 2  # More context for detailed answers
     )
+    retrieval_time = (time.time() - t1) * 1000  # ms
+
 
     # Combine retrieved context
-    context_texts = [r.payload["text"] for r in results]
+    context_texts = [r.payload["text"] for r in results.points]
     context = "\n\n".join(context_texts)
 
+
+    # Allow for conciseness if specified with the detailed argument
+    if detailed:
+        word_limit = 250
+        max_tokens = 400  
+    else:
+        word_limit = 80
+        max_tokens = 150 
+    
+    add_detail = f"Provide a complete answer in approximately {word_limit} words. Ensure you finish your last sentence."
     # Build final LLM prompt
-    prompt = f"What regional climate and soil pH conditions produce optimal potato yields?\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
+    prompt = (
+        f"Context:\n{context}\n\n"
+        f"Question: {query}\n\n"
+        f"Answer:"
+    )
 
 
+    # -----------------------------
+    # 3. Measure LLM generation time
+    # -----------------------------
+    t2 = time.time()
     # Generate answer from Titan
-    answer = ask_titan(prompt)
+    answer = ask_titan(prompt+add_detail, max_tokens=max_tokens) #with added conciseness detail and token limit
+    generation_time = (time.time() - t2) * 1000  # ms
+    # --------------------------------------
+    # 4. TOTAL RAG LATENCY = now - t0
+    # --------------------------------------
+    total_rag_latency_ms = (time.time() - t0) * 1000.0  # ms
+
+    
+    # -----------------------------
+    # 5. Print latency report
+    # -----------------------------
+    print("\n===============================")
+    print(f"Query: {query}")
+    print(f"Embedding latency: {embed_time:.2f} ms")
+    print(f"Retrieval latency: {retrieval_time:.2f} ms")
+    print(f"Generation latency: {generation_time:.2f} ms")
+    print(f"TOTAL RAG latency: {total_rag_latency_ms:.2f} ms")
+    print("===============================\n")
+
     print("Titan Answer:")
     print(answer)
-    return answer
+    return answer, embed_time, retrieval_time, generation_time, total_rag_latency_ms
 
 # --- Old Precision@k ---
 def precision_at_k(retrieved, relevant, k):
@@ -333,26 +477,27 @@ def mean_reciprocal_rank(all_results):
     return np.mean(reciprocal_ranks)
 
 if __name__ == "__main__":
+    detail = False
     user_query0 = "What regional climate and soil pH conditions produce optimal potato yields?"
-    ask_with_context(user_query0)
+    ask_with_context(user_query0, detail)
     user_query1 = "What methods are most effective for preventing insect infestations in strawberry plants without chemical pesticides?"
-    ask_with_context(user_query1)
+    ask_with_context(user_query1, detail)
     user_query2 = "Why do hydrangea flowers change color each year, and how can I control the shade?"
-    ask_with_context(user_query2)
+    ask_with_context(user_query2, detail)
     user_query3 = "How should I prepare my garden soil and perennials for winter to promote vigorous spring regrowth?"
-    ask_with_context(user_query3)
+    ask_with_context(user_query3, detail)
     user_query4 = "Which vegetable pairs exhibit beneficial companion-planting relationships that improve soil nutrients and pest resistance?"
-    ask_with_context(user_query4)
+    ask_with_context(user_query4, detail)
     user_query5 = "What visual and growth indicators show that an indoor plant is thriving and well-adjusted to its environment?"
-    ask_with_context(user_query5)
+    ask_with_context(user_query5, detail)
     user_query6 = "How frequently should I rotate crops in a home vegetable garden, and what crop families should follow each other to maintain soil fertility?"
-    ask_with_context(user_query6)
+    ask_with_context(user_query6, detail)
     user_query7 = "What are the most common causes of leaf yellowing and wilting in indoor plants, and how can they be corrected?"
-    ask_with_context(user_query7)
+    ask_with_context(user_query7, detail)
     user_query8 = "Can a plant survive or grow in complete darkness, and what physiological processes are affected?"
-    ask_with_context(user_query8)
+    ask_with_context(user_query8, detail)
     user_query9 = "How should I design a raised bed garden to optimize drainage, root health, and overall yield?"
-    ask_with_context(user_query9)
+    ask_with_context(user_query9, detail)
     ground_truth = {
         "What regional climate and soil pH conditions produce optimal potato yields?": [
             "Potatoes perform best in cool temperate climates with daytime temperatures between 15–20°C and minimal frost exposure. Optimal soil pH ranges from 5.0–6.0 to prevent scab disease. Well-drained, loamy soils with moderate moisture retention are ideal for tuber expansion and nutrient uptake."
@@ -388,8 +533,8 @@ if __name__ == "__main__":
     retrieval_results = []
     for query, relevant_docs in ground_truth.items():
         query_vec = model.encode(query).tolist()
-        results = client.search(collection_name="qa_embeddings", query_vector=query_vec,limit=5)
-        retrieved_docs = [r.id for r in results]
+        results = client.query_points(collection_name="qa_embeddings", query=query_vec,limit=5)
+        retrieved_docs = [r.id for r in results.points]
         p = precision_at_k(retrieved_docs, relevant_docs, k=5)
         r = recall_at_k(retrieved_docs, relevant_docs)
         f1 = f1_score(p, r)
