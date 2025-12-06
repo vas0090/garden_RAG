@@ -16,7 +16,7 @@ Authors: [Aditi Thanekar](https://github.com/aditithanekar), [Amisha Prasad](htt
 
 ## User Guide: 
 What you will need:
-- An API Key from QDrant: Create a QDrant account: https://qdrant.tech/ and make a cluster --> you can call it cloud-based or using your local with docker, but we used cloud-based.
+- An API Key from QDrant: Create a QDrant account: https://qdrant.tech/ and make a cluster --> you can use either the cloud-based version or using your local with docker, but we used cloud-based.
 - Go to your AWS website, and set up an EC2 instance (AMI chosen was the AWS Linux Default)- we used a **c6a.2xlarge** with **8 CPUs** and **16 GiB Memory**, and added an additional **50GB of memory**.
 - Create a ```.env``` file with your API Key in this format: do not push the ```.env``` file to GitHub.
   ```
