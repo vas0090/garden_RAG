@@ -40,6 +40,12 @@ Once your environment is set up: use the following command to run our code:
 ```
 python3 cse291a_phase_1.py
 ```
+## The following components are implemented in our code:
+- Embedding generation and storage
+- Chunking strategy appropriate for domain
+- Retrieval mechanism of vector search
+- Conciseness
+- Embedding latency, Retrieval latency, Generation latency, Total RAG latency
 
 
 
