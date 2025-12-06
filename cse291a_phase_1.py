@@ -22,7 +22,7 @@ Original file is located at
 import pandas as pd
 import json
 import numpy as np
-
+import time
 
 # Sentence transformer for embeddings
 from sentence_transformers import SentenceTransformer
